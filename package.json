@@ -1,0 +1,9 @@
+{
+  "name": "skill-eval-action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins the claude CLI used by the action so installs come from a committed lockfile",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.185"
+  }
+}

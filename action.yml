@@ -24,6 +24,14 @@ inputs:
     description: 'Timeout per eval case in seconds'
     required: false
     default: '120'
+  allowed-tools:
+    description: 'Comma/space-separated tool allow-list granted to the skill under test (e.g. "Bash(kubectl get:*),Bash(gh api:*),Read"). Forwarded to claude --allowedTools. Per-case allowed_tools overrides this.'
+    required: false
+    default: ''
+  permission-mode:
+    description: 'Permission mode for the skill under test (default, acceptEdits, plan, bypassPermissions). Forwarded to claude --permission-mode. Per-case permission_mode overrides this.'
+    required: false
+    default: ''
   post-comment:
     description: 'Post results as a PR comment'
     required: false
@@ -85,20 +93,26 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      env:
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
       run: |
         pip install pyyaml --quiet
-        npm install -g @anthropic-ai/claude-code --quiet 2>/dev/null || true
-        claude --version || { echo "::error::Failed to install claude CLI"; exit 1; }
+        npm ci --prefix "$GITHUB_ACTION_PATH" --silent
+        "$GITHUB_ACTION_PATH/node_modules/.bin/claude" --version || { echo "::error::Failed to install claude CLI"; exit 1; }
 
     - name: Run eval pipeline
       id: eval
       shell: bash
-      run: python "$GITHUB_ACTION_PATH/scripts/eval.py"
+      run: |
+        export PATH="$GITHUB_ACTION_PATH/node_modules/.bin:$PATH"
+        python "$GITHUB_ACTION_PATH/scripts/eval.py"
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
         SKILL_NAME: ${{ inputs.skill-name }}
         SKILL_PATH: ${{ inputs.skill-path }}
         EVAL_TIMEOUT: ${{ inputs.timeout }}
+        ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        PERMISSION_MODE: ${{ inputs.permission-mode }}
         PASS_THRESHOLD: ${{ inputs.pass-threshold }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         WORKSPACE: ${{ runner.temp }}/skill-eval/${{ inputs.skill-name }}

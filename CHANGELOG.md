@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `allowed-tools` and `permission-mode` inputs to grant scoped tool permissions to the skill under test, forwarded to `claude --allowedTools` / `--permission-mode`. Fixes skills that diagnose by running read-only commands failing because every tool call was auto-denied (#2)
+- Support per-case `allowed_tools` (string or list) and `permission_mode` overrides in eval YAML, validated before any API calls
+
 ## v1.1.0
 
 - Auto-fix YAML plain scalars containing `: ` (colon-space) — no more parse errors for natural-language criteria

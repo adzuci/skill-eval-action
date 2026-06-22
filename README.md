@@ -186,6 +186,8 @@ Within a single skill, eval cases run sequentially to avoid Anthropic API rate l
 | `anthropic-api-key` | Yes | - | Anthropic API key for the `claude` CLI |
 | `pass-threshold` | No | `80` | Minimum pass rate (0-100) to succeed |
 | `timeout` | No | `120` | Timeout per eval case in seconds |
+| `allowed-tools` | No | `''` | Tool allow-list granted to the skill under test, forwarded to `claude --allowedTools` (e.g. `Bash(kubectl get:*),Bash(gh api:*),Read`). Per-case `allowed_tools` overrides it |
+| `permission-mode` | No | `''` | Permission mode forwarded to `claude --permission-mode` (`default`, `acceptEdits`, `plan`, `bypassPermissions`). Per-case `permission_mode` overrides it |
 | `post-comment` | No | `true` | Post results as a PR comment |
 | `github-token` | No | `${{ github.token }}` | Token for PR comments |
 | `upload-viewer` | No | `true` | Upload eval-viewer HTML as an artifact |
@@ -233,9 +235,25 @@ criteria:                       # success criteria - ALL must pass
   - "Uses for_each, not count, for multiple resources"
 expect_skill: true              # optional - default true
 timeout: 120                    # optional - default from action input
+allowed_tools:                  # optional - overrides the action `allowed-tools` input
+  - "Bash(kubectl get:*)"
+  - "Read"
+permission_mode: default        # optional - overrides the action `permission-mode` input
 ```
 
 Include at least one negative trigger case (`expect_skill: false`).
+
+### Granting tool permissions
+
+Skills that diagnose by running read-only commands (`kubectl get`, `gh api`, `gcloud ... list`) need those commands to actually execute. By default the model runs with no tool permissions, so every `Bash` call is denied and such skills fail spuriously. Grant a scoped allow-list via the `allowed-tools` input (or per-case `allowed_tools`):
+
+```yaml
+# action invocation
+with:
+  allowed-tools: "Bash(kubectl get:*),Bash(gh api:*),Read"
+```
+
+Prefer scoped allow-lists over `permission-mode: bypassPermissions` so read-only commands run while a skill's refusal-of-mutation behavior can still be tested. Use a per-case `allowed_tools` to widen scope for a single case (e.g. allow `Bash(kubectl delete:*)` only in a case that asserts the skill refuses to run it).
 
 ## PR comment
 
