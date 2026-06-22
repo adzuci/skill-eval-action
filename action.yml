@@ -93,15 +93,19 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      env:
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
       run: |
         pip install pyyaml --quiet
-        npm install -g @anthropic-ai/claude-code --quiet 2>/dev/null || true
-        claude --version || { echo "::error::Failed to install claude CLI"; exit 1; }
+        npm ci --prefix "$GITHUB_ACTION_PATH" --silent
+        "$GITHUB_ACTION_PATH/node_modules/.bin/claude" --version || { echo "::error::Failed to install claude CLI"; exit 1; }
 
     - name: Run eval pipeline
       id: eval
       shell: bash
-      run: python "$GITHUB_ACTION_PATH/scripts/eval.py"
+      run: |
+        export PATH="$GITHUB_ACTION_PATH/node_modules/.bin:$PATH"
+        python "$GITHUB_ACTION_PATH/scripts/eval.py"
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
         SKILL_NAME: ${{ inputs.skill-name }}
