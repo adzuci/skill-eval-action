@@ -24,6 +24,14 @@ inputs:
     description: 'Timeout per eval case in seconds'
     required: false
     default: '120'
+  allowed-tools:
+    description: 'Comma/space-separated tool allow-list granted to the skill under test (e.g. "Bash(kubectl get:*),Bash(gh api:*),Read"). Forwarded to claude --allowedTools. Per-case allowed_tools overrides this.'
+    required: false
+    default: ''
+  permission-mode:
+    description: 'Permission mode for the skill under test (default, acceptEdits, plan, bypassPermissions). Forwarded to claude --permission-mode. Per-case permission_mode overrides this.'
+    required: false
+    default: ''
   post-comment:
     description: 'Post results as a PR comment'
     required: false
@@ -99,6 +107,8 @@ runs:
         SKILL_NAME: ${{ inputs.skill-name }}
         SKILL_PATH: ${{ inputs.skill-path }}
         EVAL_TIMEOUT: ${{ inputs.timeout }}
+        ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        PERMISSION_MODE: ${{ inputs.permission-mode }}
         PASS_THRESHOLD: ${{ inputs.pass-threshold }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         WORKSPACE: ${{ runner.temp }}/skill-eval/${{ inputs.skill-name }}

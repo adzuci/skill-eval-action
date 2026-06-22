@@ -17,7 +17,12 @@ os.environ.setdefault("SKILL_NAME", "test")
 os.environ.setdefault("SKILL_PATH", ".")
 os.environ.setdefault("WORKSPACE", "/tmp/skill-eval-test")
 
-from eval import _safe_yaml_load, discover_evals, validate_cases  # noqa: E402
+from eval import (  # noqa: E402
+    _normalize_allowed_tools,
+    _safe_yaml_load,
+    discover_evals,
+    validate_cases,
+)
 
 
 def test_safe_yaml_load() -> int:
@@ -62,6 +67,41 @@ def test_safe_yaml_load() -> int:
     result = _safe_yaml_load(block)
     if "colon: here" not in result["key"]:
         print(f"  FAIL: block scalar broken: {result['key']}")
+        errors += 1
+
+    return errors
+
+
+def test_allowed_tools() -> int:
+    """Test allowed_tools normalization and permission_mode validation."""
+    errors = 0
+
+    # list → comma-separated string, blanks dropped
+    if _normalize_allowed_tools(["Read", " Bash(gh api:*) ", ""]) != "Read,Bash(gh api:*)":
+        print(f"  FAIL: list normalize: {_normalize_allowed_tools(['Read', ' Bash(gh api:*) ', ''])}")
+        errors += 1
+
+    # string passes through trimmed
+    if _normalize_allowed_tools("  Read,Bash  ") != "Read,Bash":
+        print(f"  FAIL: string normalize: {_normalize_allowed_tools('  Read,Bash  ')}")
+        errors += 1
+
+    base = {"prompt": "p", "criteria": ["c"]}
+
+    # valid per-case overrides → no errors
+    ok = validate_cases([{**base, "allowed_tools": ["Read"], "permission_mode": "plan"}])
+    if ok:
+        print(f"  FAIL: valid scopes rejected: {ok}")
+        errors += 1
+
+    # bad permission_mode → error
+    if not validate_cases([{**base, "permission_mode": "yolo"}]):
+        print("  FAIL: invalid permission_mode not caught")
+        errors += 1
+
+    # non-string allowed_tools entry → error
+    if not validate_cases([{**base, "allowed_tools": [123]}]):
+        print("  FAIL: non-string allowed_tools entry not caught")
         errors += 1
 
     return errors
@@ -112,6 +152,7 @@ def test_skills_dir(skills_dir: Path) -> int:
 def main() -> None:
     print("=== _safe_yaml_load unit tests ===")
     unit_errors = test_safe_yaml_load()
+    unit_errors += test_allowed_tools()
     if unit_errors:
         print(f"FAIL: {unit_errors} unit test(s) failed\n")
     else:

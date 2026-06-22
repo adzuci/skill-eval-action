@@ -27,7 +27,11 @@ SKILL_NAME = os.environ["SKILL_NAME"]
 SKILL_PATH = Path(os.environ["SKILL_PATH"])
 WORKSPACE = Path(os.environ["WORKSPACE"])
 EVAL_TIMEOUT = int(os.environ.get("EVAL_TIMEOUT", "120"))
+ALLOWED_TOOLS = os.environ.get("ALLOWED_TOOLS", "").strip()
+PERMISSION_MODE = os.environ.get("PERMISSION_MODE", "").strip()
 PASS_THRESHOLD = float(os.environ.get("PASS_THRESHOLD", "80"))
+
+VALID_PERMISSION_MODES = {"default", "acceptEdits", "plan", "bypassPermissions"}
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 RETRY_DELAY = int(os.environ.get("RETRY_DELAY", "10"))
 
@@ -186,6 +190,26 @@ def validate_cases(cases: list[dict]) -> list[str]:
         if to is not None and not isinstance(to, (int, float)):
             errors.append(f"{prefix}: 'timeout' must be a number, got {type(to).__name__}")
 
+        # allowed_tools — optional, string or list of strings
+        at = case.get("allowed_tools")
+        if at is not None:
+            if isinstance(at, list):
+                for i, t in enumerate(at):
+                    if not isinstance(t, str):
+                        errors.append(f"{prefix}: allowed_tools[{i}] must be a string, got {type(t).__name__}")
+            elif not isinstance(at, str):
+                errors.append(f"{prefix}: 'allowed_tools' must be a string or list of strings, got {type(at).__name__}")
+
+        # permission_mode — optional, one of the valid modes
+        pm = case.get("permission_mode")
+        if pm is not None:
+            if not isinstance(pm, str):
+                errors.append(f"{prefix}: 'permission_mode' must be a string, got {type(pm).__name__}")
+            elif pm not in VALID_PERMISSION_MODES:
+                errors.append(
+                    f"{prefix}: 'permission_mode' must be one of {sorted(VALID_PERMISSION_MODES)}, got '{pm}'"
+                )
+
     return errors
 
 
@@ -193,14 +217,37 @@ def validate_cases(cases: list[dict]) -> list[str]:
 # Execution
 # ---------------------------------------------------------------------------
 
-def _run_claude(prompt: str, work_dir: Path, timeout: int) -> subprocess.CompletedProcess:
-    """Run claude -p with retries on timeout/error."""
+def _normalize_allowed_tools(value) -> str:
+    """Coerce allowed_tools (str or list) into a comma-separated string."""
+    if isinstance(value, list):
+        return ",".join(str(t).strip() for t in value if str(t).strip())
+    return str(value).strip()
+
+
+def _run_claude(
+    prompt: str,
+    work_dir: Path,
+    timeout: int,
+    allowed_tools: str = "",
+    permission_mode: str = "",
+) -> subprocess.CompletedProcess:
+    """Run claude -p with retries on timeout/error.
+
+    allowed_tools / permission_mode grant scoped tool permissions so skills
+    that diagnose by running read-only commands can actually execute them.
+    """
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+
+    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
+    if allowed_tools:
+        cmd += ["--allowedTools", allowed_tools]
+    if permission_mode:
+        cmd += ["--permission-mode", permission_mode]
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"],
+                cmd,
                 capture_output=True, text=True,
                 timeout=timeout, cwd=str(work_dir), env=env,
             )
@@ -286,10 +333,17 @@ def execute_case(case: dict, skill_content: str, case_dir: Path) -> dict:
     else:
         prompt = raw_prompt
 
+    # Per-case scopes override the action-level defaults
+    allowed_tools = _normalize_allowed_tools(case.get("allowed_tools", ALLOWED_TOOLS))
+    permission_mode = str(case.get("permission_mode", PERMISSION_MODE)).strip()
+
     start = time.time()
 
     try:
-        result = _run_claude(prompt, work_dir, case.get("timeout", EVAL_TIMEOUT))
+        result = _run_claude(
+            prompt, work_dir, case.get("timeout", EVAL_TIMEOUT),
+            allowed_tools=allowed_tools, permission_mode=permission_mode,
+        )
         elapsed = time.time() - start
         parsed = _parse_stream_json(result.stdout)
 
