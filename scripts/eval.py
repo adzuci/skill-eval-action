@@ -25,6 +25,7 @@ import yaml
 
 SKILL_NAME = os.environ["SKILL_NAME"]
 SKILL_PATH = Path(os.environ["SKILL_PATH"])
+PLUGIN_ROOT = SKILL_PATH.resolve().parent.parent
 WORKSPACE = Path(os.environ["WORKSPACE"])
 EVAL_TIMEOUT = int(os.environ.get("EVAL_TIMEOUT", "120"))
 ALLOWED_TOOLS = os.environ.get("ALLOWED_TOOLS", "").strip()
@@ -238,7 +239,7 @@ def _run_claude(
     """
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
+    cmd = ["claude", "-p", prompt, "--add-dir", str(PLUGIN_ROOT), "--output-format", "stream-json", "--verbose"]
     if allowed_tools:
         cmd += ["--allowedTools", allowed_tools]
     if permission_mode:
