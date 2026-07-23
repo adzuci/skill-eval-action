@@ -414,12 +414,18 @@ Output ONLY valid JSON in this exact format (no markdown, no explanation):
                 capture_output=True, text=True, timeout=60, env=env,
             )
             output = result.stdout.strip()
-            if "```json" in output:
-                output = output.split("```json")[1].split("```")[0].strip()
-            elif "```" in output:
-                output = output.split("```")[1].split("```")[0].strip()
-
-            grading = json.loads(output)
+            # Try the raw output first: the grader usually emits bare JSON, and
+            # that JSON may legitimately contain ``` inside evidence strings
+            # (e.g. quoting a fenced block from the response). Splitting on
+            # fences before attempting a parse mangles those valid payloads.
+            try:
+                grading = json.loads(output)
+            except json.JSONDecodeError:
+                if "```json" in output:
+                    output = output.split("```json")[1].split("```")[0].strip()
+                elif "```" in output:
+                    output = output.split("```")[1].split("```")[0].strip()
+                grading = json.loads(output)
             (case_dir / "grading.json").write_text(json.dumps(grading, indent=2) + "\n")
             return grading
 
