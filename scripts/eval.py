@@ -253,11 +253,13 @@ def _run_claude(
                 timeout=timeout, cwd=str(work_dir), env=env,
             )
             # Check for empty response (API error, rate limit)
-            if result.returncode != 0 and attempt < MAX_RETRIES:
-                delay = RETRY_DELAY * attempt
-                print(f"  ::warning::Attempt {attempt}/{MAX_RETRIES} failed (exit {result.returncode}), retrying in {delay}s...")
-                time.sleep(delay)
-                continue
+            if result.returncode != 0:
+                stderr_tail = (result.stderr or "").strip()[-300:]
+                print(f"  ::warning::Attempt {attempt}/{MAX_RETRIES} failed (exit {result.returncode}): {stderr_tail or '(no stderr)'}"
+                      + (f", retrying in {RETRY_DELAY * attempt}s..." if attempt < MAX_RETRIES else ""))
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY * attempt)
+                    continue
             return result
         except subprocess.TimeoutExpired:
             if attempt < MAX_RETRIES:
